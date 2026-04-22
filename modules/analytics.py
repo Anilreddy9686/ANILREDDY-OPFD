@@ -1,36 +1,60 @@
-"""modules/analytics.py"""
+"""
+modules/analytics.py
+FULL FIX: Works for BOTH MySQL + SQLite
+"""
+
 from flask import Blueprint, render_template, session
 from modules.security import login_required
-from modules.db import query
+from modules.db import query, USE_SQLITE
 
 analytics_bp = Blueprint("analytics", __name__)
 
 @analytics_bp.route("/analytics")
 @login_required
 def analytics():
-    uid      = session["user_id"]
+    uid = session["user_id"]
     is_admin = session.get("role") == "admin"
 
-    # ✅ SAFE WHERE CLAUSE
+    # ===========================
+    # WHERE CLAUSE (SAFE)
+    # ===========================
     if is_admin:
         where_clause = ""
-        params = None
+        params = ()
     else:
         where_clause = "WHERE user_id = %s"
         params = (uid,)
 
-    # 🔥 FIXED: %%Y-%%m (escape % for PyMySQL)
-    monthly = query(f"""
-        SELECT DATE_FORMAT(created_at,'%%Y-%%m') AS month,
-               COUNT(*) AS total,
-               SUM(CASE WHEN LOWER(prediction)='fraud' THEN 1 ELSE 0 END) AS frauds,
-               COALESCE(SUM(amount_inr),0) AS volume
-        FROM transactions {where_clause}
-        GROUP BY month
-        ORDER BY month DESC
-        LIMIT 12
-    """, params)
+    # ===========================
+    # 🔥 MONTHLY (FIXED FOR BOTH DB)
+    # ===========================
+    if USE_SQLITE:
+        monthly = query(f"""
+            SELECT 
+                substr(created_at,1,7) AS month,
+                COUNT(*) AS total,
+                SUM(CASE WHEN LOWER(prediction)='fraud' THEN 1 ELSE 0 END) AS frauds,
+                COALESCE(SUM(amount_inr),0) AS volume
+            FROM transactions {where_clause.replace('%s','?')}
+            GROUP BY month
+            ORDER BY month DESC
+            LIMIT 12
+        """, params)
+    else:
+        monthly = query(f"""
+            SELECT DATE_FORMAT(created_at,'%%Y-%%m') AS month,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN LOWER(prediction)='fraud' THEN 1 ELSE 0 END) AS frauds,
+                   COALESCE(SUM(amount_inr),0) AS volume
+            FROM transactions {where_clause}
+            GROUP BY month
+            ORDER BY month DESC
+            LIMIT 12
+        """, params)
 
+    # ===========================
+    # COMMON QUERIES (BOTH DB SAFE)
+    # ===========================
     by_type = query(f"""
         SELECT type,
                COUNT(*) AS total,
@@ -50,10 +74,11 @@ def analytics():
         COUNT(*) AS cnt
         FROM transactions {where_clause}
         GROUP BY band
-        ORDER BY MIN(risk_score)
     """, params)
 
-    # Admin-only
+    # ===========================
+    # ADMIN ONLY
+    # ===========================
     top_users = []
     if is_admin:
         top_users = query("""
@@ -68,6 +93,9 @@ def analytics():
             LIMIT 10
         """)
 
+    # ===========================
+    # RETURN SAFE DATA
+    # ===========================
     return render_template(
         "analytics.html",
         monthly=monthly or [],
