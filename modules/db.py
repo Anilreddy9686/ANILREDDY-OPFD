@@ -106,7 +106,7 @@ def init_sqlite_tables():
     conn = sqlite3.connect(SQLITE_DB)
     cur = conn.cursor()
 
-    # USERS
+    # USERS (ORIGINAL)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,6 +117,32 @@ def init_sqlite_tables():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # 🔥 ADD THIS (IMPORTANT FIX — DO NOT REMOVE ABOVE)
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1")
+    except:
+        pass
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN login_attempts INTEGER DEFAULT 0")
+    except:
+        pass
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN locked_until DATETIME")
+    except:
+        pass
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN otp_enabled INTEGER DEFAULT 0")
+    except:
+        pass
+
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
+    except:
+        pass
 
     # TRANSACTIONS
     cur.execute("""
@@ -131,7 +157,7 @@ def init_sqlite_tables():
         )
     """)
 
-    # 🔥 FIXED ERROR TABLE
+    # IP BLACKLIST
     cur.execute("""
         CREATE TABLE IF NOT EXISTS ip_blacklist (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
