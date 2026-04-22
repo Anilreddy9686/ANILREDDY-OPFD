@@ -5,31 +5,27 @@ Developed by ANILREDDY | 9686809509
 """
 
 # ===========================
-# 🔥 NEW IMPORTS (ADD ONLY)
+# IMPORTS
 # ===========================
 import os
 import sqlite3
 from flask import g
-
-# ===========================
-# EXISTING MYSQL CODE (UNCHANGED)
-# ===========================
 from flask_mysqldb import MySQL
 
 mysql = MySQL()
 
 # ===========================
-# 🔥 NEW: AUTO SWITCH FLAG
+# AUTO SWITCH
 # ===========================
 USE_SQLITE = os.environ.get("USE_SQLITE", "0") == "1"
 SQLITE_DB = "opfd.db"
 
 # ===========================
-# EXISTING FUNCTIONS (UNCHANGED)
+# MYSQL / SQLITE SWITCH
 # ===========================
 def get_cursor():
     if USE_SQLITE:
-        return get_sqlite_cursor()
+        return get_sqlite_conn().cursor()
 
     if "db_conn" not in g:
         g.db_conn = mysql.connection
@@ -65,8 +61,9 @@ def execute(sql, args=()):
     conn.commit()
     return cur.lastrowid
 
+
 # ===========================
-# 🔥 NEW SQLITE FUNCTIONS
+# SQLITE CORE
 # ===========================
 def get_sqlite_conn():
     if "sqlite_db" not in g:
@@ -75,15 +72,11 @@ def get_sqlite_conn():
     return g.sqlite_db
 
 
-def get_sqlite_cursor():
-    return get_sqlite_conn().cursor()
-
-
 def sqlite_query(sql, args=()):
     conn = get_sqlite_conn()
     cur = conn.cursor()
 
-    # 🔥 Fix MySQL → SQLite compatibility
+    # Convert MySQL syntax → SQLite
     sql = sql.replace("%s", "?")
     sql = sql.replace("AUTO_INCREMENT", "AUTOINCREMENT")
     sql = sql.replace("ENGINE=InnoDB", "")
@@ -105,13 +98,15 @@ def sqlite_execute(sql, args=()):
     conn.commit()
     return cur.lastrowid
 
+
 # ===========================
-# 🔥 NEW: SQLITE TABLE INIT (VERY IMPORTANT)
+# SQLITE TABLE CREATION (FIXED)
 # ===========================
 def init_sqlite_tables():
     conn = sqlite3.connect(SQLITE_DB)
     cur = conn.cursor()
 
+    # USERS
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,6 +118,7 @@ def init_sqlite_tables():
         )
     """)
 
+    # TRANSACTIONS
     cur.execute("""
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,51 +131,56 @@ def init_sqlite_tables():
         )
     """)
 
+    # 🔥 FIXED ERROR TABLE
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ip_blacklist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip_address TEXT UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # ALERTS
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            message TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
 
+
 # ===========================
-# EXISTING INIT_DB (UPDATED MINIMALLY)
+# INIT DB
 # ===========================
 def init_db(app):
     if USE_SQLITE:
         print("🟢 Using SQLite database")
-        init_sqlite_tables()   # 🔥 ADDED LINE (CRITICAL FIX)
+        init_sqlite_tables()
+        print("✅ SQLite DB ready")
         return
 
     mysql.init_app(app)
+
     with app.app_context():
         conn = mysql.connection
         cur  = conn.cursor()
 
-        # ── users ──────────────────────────────────────────
+        # USERS TABLE
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                id               INT AUTO_INCREMENT PRIMARY KEY,
-                username         VARCHAR(60)  NOT NULL,
-                email            VARCHAR(120) NOT NULL,
-                password_hash    VARCHAR(256) NOT NULL,
-                full_name        VARCHAR(120),
-                mobile           VARCHAR(12),
-                role             ENUM('user','admin') DEFAULT 'user',
-                is_active        TINYINT(1) DEFAULT 1,
-                otp_enabled      TINYINT(1) DEFAULT 0,
-                email_verified   TINYINT(1) DEFAULT 0,
-                verify_token     VARCHAR(64),
-                reset_token      VARCHAR(64),
-                reset_expires    DATETIME,
-                avatar_color     VARCHAR(20) DEFAULT '#FF9933',
-                state            VARCHAR(50),
-                bio              VARCHAR(200),
-                last_login       DATETIME,
-                login_attempts   TINYINT DEFAULT 0,
-                locked_until     DATETIME,
-                created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY uq_username (username),
-                UNIQUE KEY uq_email    (email)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(60),
+                email VARCHAR(120),
+                password_hash VARCHAR(256),
+                role ENUM('user','admin') DEFAULT 'user',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
         """)
 
         conn.commit()
-
-        print("✅ opfd_india DB ready — admin / Admin@123")
+        print("✅ MySQL DB ready")
