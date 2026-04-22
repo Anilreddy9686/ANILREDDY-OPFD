@@ -1,0 +1,7 @@
+Flask==3.0.3
+Flask-MySQLdb==2.0.0
+PyMySQL==1.1.1
+Werkzeug==3.0.3
+numpy
+pandas
+scikit-learn
