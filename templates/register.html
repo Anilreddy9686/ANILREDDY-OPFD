@@ -36,23 +36,75 @@ input:focus{border-color:#FF9933;background:rgba(255,153,51,.05)}
   <h2>Create Account</h2>
   <div class="sub">Developed by ANILREDDY | 9686809509</div>
   <div class="tabs"><a href="/login" class="tab">Sign In</a><a href="/register" class="tab on">Register</a></div>
-  {% with msgs=get_flashed_messages(with_categories=true) %}{% if msgs %}{% for c,m in msgs %}
+
+  {% with msgs=get_flashed_messages(with_categories=true) %}
+  {% if msgs %}
+  {% for c,m in msgs %}
   <div class="alert a-{{c}}"><i class="fas fa-info-circle"></i>{{m}}</div>
-  {% endfor %}{% endif %}{% endwith %}
+  {% endfor %}
+  {% endif %}
+  {% endwith %}
+
   <form method="POST" action="/register">
+
     <div class="g2">
-      <div class="fg"><label>Full Name</label><div class="ii"><i class="fas fa-id-card"></i><input name="full_name" placeholder="Rahul Sharma"></div></div>
-      <div class="fg"><label>Mobile (India)</label><div class="ii"><i class="fas fa-mobile-alt"></i><input name="mobile" placeholder="9876543210" pattern="[6-9][0-9]{9}"></div></div>
+      <div class="fg">
+        <label>Full Name</label>
+        <div class="ii">
+          <i class="fas fa-id-card"></i>
+          <input name="full_name" value="ANILREDDY" placeholder="Rahul Sharma">
+        </div>
+      </div>
+
+      <div class="fg">
+        <label>Mobile (India)</label>
+        <div class="ii">
+          <i class="fas fa-mobile-alt"></i>
+          <input name="mobile" value="9686809509" placeholder="9876543210" pattern="[6-9][0-9]{9}">
+        </div>
+      </div>
     </div>
-    <div class="fg"><label>Username *</label><div class="ii"><i class="fas fa-user"></i><input name="username" placeholder="min 4 chars, letters/numbers" required minlength="4"></div></div>
-    <div class="fg"><label>Email *</label><div class="ii"><i class="fas fa-envelope"></i><input type="email" name="email" placeholder="your@email.in" required></div></div>
+
+    <div class="fg">
+      <label>Username *</label>
+      <div class="ii">
+        <i class="fas fa-user"></i>
+        <input name="username" value="anilreddy" placeholder="min 4 chars, letters/numbers" required minlength="4">
+      </div>
+    </div>
+
+    <div class="fg">
+      <label>Email *</label>
+      <div class="ii">
+        <i class="fas fa-envelope"></i>
+        <input type="email" name="email" value="anilreddy@gmail.com" placeholder="your@email.in" required>
+      </div>
+    </div>
+
     <div class="g2">
-      <div class="fg"><label>Password *</label><div class="ii"><i class="fas fa-lock"></i><input type="password" name="password" placeholder="Min 8 chars" required minlength="8"></div></div>
-      <div class="fg"><label>Confirm *</label><div class="ii"><i class="fas fa-lock"></i><input type="password" name="confirm_password" required></div></div>
+      <div class="fg">
+        <label>Password *</label>
+        <div class="ii">
+          <i class="fas fa-lock"></i>
+          <input type="password" name="password" value="Anil@123" placeholder="Min 8 chars" required minlength="8">
+        </div>
+      </div>
+
+      <div class="fg">
+        <label>Confirm *</label>
+        <div class="ii">
+          <i class="fas fa-lock"></i>
+          <input type="password" name="confirm_password" value="Anil@123" required>
+        </div>
+      </div>
     </div>
+
     <div class="pw-rules">Password must have: 8+ chars, 1 uppercase, 1 number</div>
+
     <br>
     <button type="submit" class="btn">Create Account →</button>
+
   </form>
 </div>
-</body></html>
+</body>
+</html>
