@@ -9,6 +9,7 @@ Developed by ANILREDDY | 9686809509
 # ===========================
 import os
 import sqlite3
+import traceback   # ✅ NEW (debug)
 from flask import g
 from flask_mysqldb import MySQL
 
@@ -28,7 +29,12 @@ def get_cursor():
         return get_sqlite_conn().cursor()
 
     if "db_conn" not in g:
-        g.db_conn = mysql.connection
+        try:
+            g.db_conn = mysql.connection   # ✅ SAFE MYSQL
+        except Exception as e:
+            print("⚠️ MySQL failed → switching to SQLite:", e)
+            return get_sqlite_conn().cursor()
+
     return g.db_conn.cursor()
 
 
@@ -36,9 +42,14 @@ def query(sql, args=()):
     if USE_SQLITE:
         return sqlite_query(sql, args)
 
-    cur = get_cursor()
-    cur.execute(sql, args)
-    return cur.fetchall()
+    try:
+        cur = get_cursor()
+        cur.execute(sql, args)
+        return cur.fetchall()
+    except Exception as e:
+        print("❌ MYSQL QUERY ERROR:", e)
+        traceback.print_exc()
+        return []
 
 
 def query_one(sql, args=()):
@@ -46,20 +57,30 @@ def query_one(sql, args=()):
         res = sqlite_query(sql, args)
         return res[0] if res else None
 
-    cur = get_cursor()
-    cur.execute(sql, args)
-    return cur.fetchone()
+    try:
+        cur = get_cursor()
+        cur.execute(sql, args)
+        return cur.fetchone()
+    except Exception as e:
+        print("❌ MYSQL QUERY_ONE ERROR:", e)
+        traceback.print_exc()
+        return None
 
 
 def execute(sql, args=()):
     if USE_SQLITE:
         return sqlite_execute(sql, args)
 
-    conn = mysql.connection
-    cur  = conn.cursor()
-    cur.execute(sql, args)
-    conn.commit()
-    return cur.lastrowid
+    try:
+        conn = mysql.connection
+        cur  = conn.cursor()
+        cur.execute(sql, args)
+        conn.commit()
+        return cur.lastrowid
+    except Exception as e:
+        print("❌ MYSQL EXEC ERROR:", e)
+        traceback.print_exc()
+        return None
 
 
 # ===========================
@@ -67,7 +88,7 @@ def execute(sql, args=()):
 # ===========================
 def get_sqlite_conn():
     if "sqlite_db" not in g:
-        g.sqlite_db = sqlite3.connect(SQLITE_DB)
+        g.sqlite_db = sqlite3.connect(SQLITE_DB, check_same_thread=False)  # ✅ FIX
         g.sqlite_db.row_factory = sqlite3.Row
     return g.sqlite_db
 
@@ -76,16 +97,22 @@ def sqlite_query(sql, args=()):
     conn = get_sqlite_conn()
     cur = conn.cursor()
 
-    # Convert MySQL syntax → SQLite
+    # Convert MySQL → SQLite
     sql = sql.replace("%s", "?")
     sql = sql.replace("AUTO_INCREMENT", "AUTOINCREMENT")
     sql = sql.replace("ENGINE=InnoDB", "")
     sql = sql.replace("DEFAULT CHARSET=utf8mb4", "")
     sql = sql.replace("ENUM('Fraud','Legitimate')", "TEXT")
 
-    cur.execute(sql, args)
-    rows = cur.fetchall()
-    return [dict(r) for r in rows]
+    try:
+        cur.execute(sql, args)
+        rows = cur.fetchall()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print("❌ SQLITE QUERY ERROR:", e)
+        print("SQL:", sql)
+        traceback.print_exc()
+        return []
 
 
 def sqlite_execute(sql, args=()):
@@ -94,19 +121,25 @@ def sqlite_execute(sql, args=()):
 
     sql = sql.replace("%s", "?")
 
-    cur.execute(sql, args)
-    conn.commit()
-    return cur.lastrowid
+    try:
+        cur.execute(sql, args)
+        conn.commit()
+        return cur.lastrowid
+    except Exception as e:
+        print("❌ SQLITE EXEC ERROR:", e)
+        print("SQL:", sql)
+        traceback.print_exc()
+        return None
 
 
 # ===========================
-# SQLITE TABLE CREATION (FIXED)
+# SQLITE TABLE CREATION
 # ===========================
 def init_sqlite_tables():
     conn = sqlite3.connect(SQLITE_DB)
     cur = conn.cursor()
 
-    # USERS (ORIGINAL)
+    # USERS
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,31 +151,18 @@ def init_sqlite_tables():
         )
     """)
 
-    # 🔥 ADD THIS (IMPORTANT FIX — DO NOT REMOVE ABOVE)
-    try:
-        cur.execute("ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1")
-    except:
-        pass
-
-    try:
-        cur.execute("ALTER TABLE users ADD COLUMN login_attempts INTEGER DEFAULT 0")
-    except:
-        pass
-
-    try:
-        cur.execute("ALTER TABLE users ADD COLUMN locked_until DATETIME")
-    except:
-        pass
-
-    try:
-        cur.execute("ALTER TABLE users ADD COLUMN otp_enabled INTEGER DEFAULT 0")
-    except:
-        pass
-
-    try:
-        cur.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
-    except:
-        pass
+    # 🔥 SAFE COLUMN ADD (NO CRASH)
+    for col in [
+        "is_active INTEGER DEFAULT 1",
+        "login_attempts INTEGER DEFAULT 0",
+        "locked_until DATETIME",
+        "otp_enabled INTEGER DEFAULT 0",
+        "email_verified INTEGER DEFAULT 0"
+    ]:
+        try:
+            cur.execute(f"ALTER TABLE users ADD COLUMN {col}")
+        except:
+            pass
 
     # TRANSACTIONS
     cur.execute("""
@@ -179,6 +199,8 @@ def init_sqlite_tables():
     conn.commit()
     conn.close()
 
+    print("📊 SQLite tables initialized successfully")  # ✅ NEW
+
 
 # ===========================
 # INIT DB
@@ -193,20 +215,24 @@ def init_db(app):
     mysql.init_app(app)
 
     with app.app_context():
-        conn = mysql.connection
-        cur  = conn.cursor()
+        try:
+            conn = mysql.connection
+            cur  = conn.cursor()
 
-        # USERS TABLE
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(60),
-                email VARCHAR(120),
-                password_hash VARCHAR(256),
-                role ENUM('user','admin') DEFAULT 'user',
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    username VARCHAR(60),
+                    email VARCHAR(120),
+                    password_hash VARCHAR(256),
+                    role ENUM('user','admin') DEFAULT 'user',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
 
-        conn.commit()
-        print("✅ MySQL DB ready")
+            conn.commit()
+            print("✅ MySQL DB ready")
+
+        except Exception as e:
+            print("❌ MYSQL INIT ERROR:", e)
+            traceback.print_exc()
