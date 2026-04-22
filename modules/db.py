@@ -106,11 +106,45 @@ def sqlite_execute(sql, args=()):
     return cur.lastrowid
 
 # ===========================
-# EXISTING INIT_DB (UNCHANGED)
+# 🔥 NEW: SQLITE TABLE INIT (VERY IMPORTANT)
+# ===========================
+def init_sqlite_tables():
+    conn = sqlite3.connect(SQLITE_DB)
+    cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            email TEXT,
+            password_hash TEXT,
+            role TEXT DEFAULT 'user',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            amount_inr REAL,
+            prediction TEXT,
+            risk_score INTEGER,
+            type TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+# ===========================
+# EXISTING INIT_DB (UPDATED MINIMALLY)
 # ===========================
 def init_db(app):
     if USE_SQLITE:
         print("🟢 Using SQLite database")
+        init_sqlite_tables()   # 🔥 ADDED LINE (CRITICAL FIX)
         return
 
     mysql.init_app(app)
@@ -146,7 +180,6 @@ def init_db(app):
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """)
 
-        # (rest of your original code unchanged...)
         conn.commit()
 
         print("✅ opfd_india DB ready — admin / Admin@123")
