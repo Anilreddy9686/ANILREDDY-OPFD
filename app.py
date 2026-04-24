@@ -16,6 +16,10 @@ pymysql.install_as_MySQLdb()
 from flask import Flask, redirect, url_for, session
 from config import Config
 
+# 🔥 NEW (for admin auto create)
+from werkzeug.security import generate_password_hash
+from modules.db import execute
+
 # Blueprints
 from modules.db        import init_db, mysql
 from modules.auth      import auth_bp
@@ -70,6 +74,27 @@ try:
     print("✅ Database initialized successfully")
 except Exception as e:
     print("❌ Database connection failed:", str(e))
+
+
+# ─────────────────────────────────────────────────────────────
+# 🔥 AUTO ADMIN CREATION (NEW CODE ADDED)
+# ─────────────────────────────────────────────────────────────
+try:
+    with app.app_context():
+        execute(
+            "INSERT IGNORE INTO users (username,email,password_hash,role,email_verified) VALUES (%s,%s,%s,%s,%s)",
+            (
+                "admin",
+                "blackheartreddy@gmail.com",
+                generate_password_hash("Admin@123"),
+                "admin",
+                1
+            )
+        )
+        print("✅ Admin auto-check done (created if not exists)")
+except Exception as e:
+    print("❌ Admin auto-create error:", str(e))
+
 
 # ─────────────────────────────────────────────────────────────
 # 🌐 Routes
