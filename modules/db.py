@@ -9,7 +9,7 @@ Developed by ANILREDDY | 9686809509
 # ===========================
 import os
 import sqlite3
-import traceback   # ✅ NEW (debug)
+import traceback
 from flask import g
 from flask_mysqldb import MySQL
 
@@ -30,7 +30,7 @@ def get_cursor():
 
     if "db_conn" not in g:
         try:
-            g.db_conn = mysql.connection   # ✅ SAFE MYSQL
+            g.db_conn = mysql.connection
         except Exception as e:
             print("⚠️ MySQL failed → switching to SQLite:", e)
             return get_sqlite_conn().cursor()
@@ -88,7 +88,7 @@ def execute(sql, args=()):
 # ===========================
 def get_sqlite_conn():
     if "sqlite_db" not in g:
-        g.sqlite_db = sqlite3.connect(SQLITE_DB, check_same_thread=False)  # ✅ FIX
+        g.sqlite_db = sqlite3.connect(SQLITE_DB, check_same_thread=False)
         g.sqlite_db.row_factory = sqlite3.Row
     return g.sqlite_db
 
@@ -121,6 +121,14 @@ def sqlite_execute(sql, args=()):
 
     sql = sql.replace("%s", "?")
 
+    # 🔥 FIX: MySQL DUPLICATE → SQLite REPLACE
+    if "ON DUPLICATE KEY UPDATE" in sql:
+        sql = sql.replace(
+            "ON DUPLICATE KEY UPDATE setting_value=?",
+            ""
+        )
+        sql = sql.replace("INSERT INTO", "INSERT OR REPLACE INTO")
+
     try:
         cur.execute(sql, args)
         conn.commit()
@@ -151,13 +159,15 @@ def init_sqlite_tables():
         )
     """)
 
-    # 🔥 SAFE COLUMN ADD (NO CRASH)
+    # 🔥 ADD MISSING USER COLUMNS
     for col in [
+        "full_name TEXT",
+        "mobile TEXT",
+        "email_verified INTEGER DEFAULT 1",
         "is_active INTEGER DEFAULT 1",
         "login_attempts INTEGER DEFAULT 0",
         "locked_until DATETIME",
-        "otp_enabled INTEGER DEFAULT 0",
-        "email_verified INTEGER DEFAULT 0"
+        "otp_enabled INTEGER DEFAULT 0"
     ]:
         try:
             cur.execute(f"ALTER TABLE users ADD COLUMN {col}")
@@ -177,15 +187,6 @@ def init_sqlite_tables():
         )
     """)
 
-    # IP BLACKLIST
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS ip_blacklist (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ip_address TEXT UNIQUE,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
     # ALERTS
     cur.execute("""
         CREATE TABLE IF NOT EXISTS alerts (
@@ -196,10 +197,46 @@ def init_sqlite_tables():
         )
     """)
 
+    # 🔥 ADD is_read COLUMN
+    try:
+        cur.execute("ALTER TABLE alerts ADD COLUMN is_read INTEGER DEFAULT 0")
+    except:
+        pass
+
+    # IP BLACKLIST
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ip_blacklist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip_address TEXT UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # 🔥 NEW TABLE: AUDIT LOG
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            action TEXT,
+            details TEXT,
+            ip_address TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # 🔥 NEW TABLE: SYSTEM SETTINGS
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS system_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            setting_key TEXT UNIQUE,
+            setting_value TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
-    print("📊 SQLite tables initialized successfully")  # ✅ NEW
+    print("📊 SQLite tables initialized successfully")
 
 
 # ===========================
