@@ -13,6 +13,9 @@ import traceback
 from flask import g
 from flask_mysqldb import MySQL
 
+# 🔥 ADD (PlanetScale support)
+import pymysql
+
 mysql = MySQL()
 
 # ===========================
@@ -73,6 +76,13 @@ def execute(sql, args=()):
 
     try:
         conn = mysql.connection
+
+        # 🔥 ADD (keep connection alive + PlanetScale stability)
+        try:
+            conn.ping(True)
+        except:
+            pass
+
         cur  = conn.cursor()
         cur.execute(sql, args)
         conn.commit()
@@ -121,7 +131,6 @@ def sqlite_execute(sql, args=()):
 
     sql = sql.replace("%s", "?")
 
-    # 🔥 FIX: MySQL DUPLICATE → SQLite REPLACE
     if "ON DUPLICATE KEY UPDATE" in sql:
         sql = sql.replace(
             "ON DUPLICATE KEY UPDATE setting_value=?",
@@ -147,7 +156,6 @@ def init_sqlite_tables():
     conn = sqlite3.connect(SQLITE_DB)
     cur = conn.cursor()
 
-    # USERS
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,7 +167,6 @@ def init_sqlite_tables():
         )
     """)
 
-    # 🔥 ADD MISSING USER COLUMNS
     for col in [
         "full_name TEXT",
         "mobile TEXT",
@@ -174,7 +181,6 @@ def init_sqlite_tables():
         except:
             pass
 
-    # TRANSACTIONS
     cur.execute("""
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -187,7 +193,6 @@ def init_sqlite_tables():
         )
     """)
 
-    # ALERTS
     cur.execute("""
         CREATE TABLE IF NOT EXISTS alerts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -197,13 +202,11 @@ def init_sqlite_tables():
         )
     """)
 
-    # 🔥 ADD is_read COLUMN
     try:
         cur.execute("ALTER TABLE alerts ADD COLUMN is_read INTEGER DEFAULT 0")
     except:
         pass
 
-    # IP BLACKLIST
     cur.execute("""
         CREATE TABLE IF NOT EXISTS ip_blacklist (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -212,7 +215,6 @@ def init_sqlite_tables():
         )
     """)
 
-    # 🔥 NEW TABLE: AUDIT LOG
     cur.execute("""
         CREATE TABLE IF NOT EXISTS audit_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -224,7 +226,6 @@ def init_sqlite_tables():
         )
     """)
 
-    # 🔥 NEW TABLE: SYSTEM SETTINGS
     cur.execute("""
         CREATE TABLE IF NOT EXISTS system_settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -248,6 +249,9 @@ def init_db(app):
         init_sqlite_tables()
         print("✅ SQLite DB ready")
         return
+
+    # 🔥 ADD (PlanetScale SSL)
+    app.config["MYSQL_SSL"] = {"ssl": {}}
 
     mysql.init_app(app)
 
